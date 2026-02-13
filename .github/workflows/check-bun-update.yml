@@ -1,0 +1,54 @@
+name: Check Bun Base Image Update
+
+on:
+  schedule:
+    # A cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch current oven/bun digest
+        id: fetch
+        run: |
+          RESP=$(curl -sL "https://hub.docker.com/v2/repositories/oven/bun/tags?name=latest&page_size=1")
+          DIGEST=$(echo "$RESP" | jq -r '.results[0].digest // empty')
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to fetch digest"
+            exit 1
+          fi
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Current oven/bun:latest digest: $DIGEST"
+
+      - name: Compare with stored digest
+        id: compare
+        run: |
+          STORED=$(cat .github/bun-base-digest 2>/dev/null | tr -d '\n\r' || echo "")
+          CURRENT="${{ steps.fetch.outputs.digest }}"
+          if [ -z "$STORED" ] || [ "$STORED" != "$CURRENT" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Bun base image updated. Stored: $STORED | Current: $CURRENT"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No change detected"
+          fi
+
+      - name: Update digest and trigger build
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          echo "${{ steps.fetch.outputs.digest }}" > .github/bun-base-digest
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/bun-base-digest
+          git commit -m "chore: update bun base image digest"
+          git push
