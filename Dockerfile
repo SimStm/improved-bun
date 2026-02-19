@@ -31,7 +31,8 @@ RUN apt-get install -y --no-install-recommends \
 RUN wget http://ftp.de.debian.org/debian/pool/contrib/m/msttcorefonts/ttf-mscorefonts-installer_3.8_all.deb \
     && dpkg -i ttf-mscorefonts-installer_3.8_all.deb
 
-RUN pip3 install --break-system-packages --no-cache-dir yt-dlp
+RUN pip3 install --break-system-packages --no-cache-dir --pre yt-dlp
+
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
