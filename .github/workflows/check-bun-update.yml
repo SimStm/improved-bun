@@ -6,29 +6,47 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+# GITHUB_TOKEN sozinho: push não dispara outros workflows (evita loops).
+# PAT_REPO no checkout: o push passa a disparar Docker Image CI como qualquer push humano.
+# Sem PAT: após o push, disparamos workflow_dispatch com gh (precisa actions: write).
 jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_REPO || github.token }}
 
-      - name: Fetch current oven/bun digest
+      # Usa a Registry HTTP API v2 (registry-1.docker.io), mesma fonte do `docker pull`.
+      # A API REST hub.docker.com/v2/repositories/.../tags pode expor digest defasado ou
+      # incompatível com o manifest real; o header Docker-Content-Digest é o valor correto.
+      - name: Fetch registry digest for oven/bun:latest
         id: fetch
         run: |
-          RESP=$(curl -sL "https://hub.docker.com/v2/repositories/oven/bun/tags?name=latest&page_size=1")
-          DIGEST=$(echo "$RESP" | jq -r '.results[0].digest // empty')
-          if [ -z "$DIGEST" ]; then
-            echo "Failed to fetch digest"
+          set -euo pipefail
+          TOKEN=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:oven/bun:pull" | jq -r '.token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Failed to obtain anonymous registry token"
             exit 1
           fi
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Current oven/bun:latest digest: $DIGEST"
+          HEADERS=$(curl -fsSLI \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            "https://registry-1.docker.io/v2/oven/bun/manifests/latest")
+          DIGEST=$(echo "$HEADERS" | tr -d '\r' | grep -i '^docker-content-digest:' | awk '{print $2}' | head -1)
+          if [ -z "$DIGEST" ]; then
+            echo "::error::No Docker-Content-Digest in registry response"
+            echo "$HEADERS" | head -c 4000
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Registry oven/bun:latest manifest digest: ${DIGEST}"
 
       - name: Compare with stored digest
         id: compare
@@ -37,18 +55,35 @@ jobs:
           CURRENT="${{ steps.fetch.outputs.digest }}"
           if [ -z "$STORED" ] || [ "$STORED" != "$CURRENT" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Bun base image updated. Stored: $STORED | Current: $CURRENT"
+            echo "Bun base manifest changed. Stored: ${STORED:-<empty>} | Current: ${CURRENT}"
           else
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No change detected"
+            echo "No change (digest matches registry manifest)"
           fi
 
-      - name: Update digest and trigger build
+      - name: Update digest and push
         if: steps.compare.outputs.changed == 'true'
+        id: digestpush
         run: |
           echo "${{ steps.fetch.outputs.digest }}" > .github/bun-base-digest
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/bun-base-digest
-          git commit -m "chore: update bun base image digest"
+          git commit -m "chore: sync bun base digest from registry-1.docker.io"
           git push
+
+      # Commits feitos só com GITHUB_TOKEN não geram evento push que dispare outros workflows.
+      # Com PAT no checkout, o push acima já dispara Docker Image CI.
+      # Sem PAT: forçamos workflow_dispatch (documentação: às vezes ainda exige PAT para disparar de workflow → workflow).
+      - name: Trigger Docker Image CI if push did not use PAT
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAT_REPO: ${{ secrets.PAT_REPO }}
+        run: |
+          if [ -n "$PAT_REPO" ]; then
+            echo "PAT_REPO is set: push used a personal token; Docker Image CI should run from the push event."
+            exit 0
+          fi
+          echo "No PAT_REPO: dispatching Docker Image CI via workflow_dispatch..."
+          gh workflow run docker-image.yml --ref "${{ github.ref_name }}"

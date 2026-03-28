@@ -46,3 +46,15 @@ jobs:
           tags: |
             simstosh/improved-bun:latest
             simstosh/improved-bun:${{ steps.meta.outputs.now }}
+
+      # Atualiza a descrição / README da página do repositório no Docker Hub (independente do docker push)
+      - name: Sync README to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: simstosh/improved-bun
+          readme-filepath: ./README.md
+          short-description: Bun+Python+FFmpeg+yt-dlp. Source github.com/SimStm/improved-bun
+          enable-url-completion: true
