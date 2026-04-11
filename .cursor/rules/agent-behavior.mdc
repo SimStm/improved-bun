@@ -1,0 +1,31 @@
+---
+description: "Agente no improved-bun: priorizar Dockerfile reprodutível, camadas mínimas, segurança (usuário não-root já definido), workflows GitHub Actions e README sincronizado com Docker Hub; não inventar código de app — só infra e docs."
+globs: "Dockerfile,README.md,.github/**/*"
+alwaysApply: true
+---
+
+# Comportamento do agente — improved-bun
+
+## Escopo
+
+- Este repositório **não** contém `package.json` de aplicação: evitar criar “app” aqui salvo pedido explícito do mantenedor.
+- Mudanças válidas: `Dockerfile`, `.github/workflows/*`, `.github/bun-base-digest`, `README.md`.
+
+## Dockerfile
+
+- Manter `DEBIAN_FRONTEND=noninteractive` e limpeza `apt` (`rm -rf /var/lib/apt/lists/*`) após instalações.
+- Preservar criação do usuário `app` e `USER app` após instalações que exigem root.
+- Novas dependências APT: justificar tamanho e superfície de ataque; preferir `--no-install-recommends`.
+
+## CI/CD
+
+- Workflows dependem de secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`; opcional `PAT_REPO` para encadear builds (ver README).
+- Alterar triggers ou jobs: testar mentalmente impacto em **multi-arch** (`linux/amd64`, `linux/arm64`).
+
+## Documentação
+
+- README é enviado ao Docker Hub: manter seções de tags, pinning e troubleshooting alinhadas ao comportamento real do CI.
+
+## Antes de propor mudanças grandes
+
+- Confirmar com o usuário se a intenção é mudar **base Bun** (semver fixo vs `latest`) ou apenas camadas extras.

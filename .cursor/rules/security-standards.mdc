@@ -1,0 +1,31 @@
+---
+description: "Segurança improved-bun: supply chain da imagem base oven/bun, integridade de pacotes APT/pip, não embutir secrets no Dockerfile, PAT e tokens só em GitHub Secrets, revisar wget de .deb externo (msttcorefonts) e confiar em fontes Debian oficiais quando possível."
+globs: "Dockerfile,.github/**/*"
+alwaysApply: true
+---
+
+# Segurança — improved-bun
+
+## Secrets
+
+- Nunca colocar `DOCKERHUB_TOKEN`, senhas ou chaves no Dockerfile, README ou commits.
+- Usar apenas **GitHub Encrypted Secrets** nos workflows.
+
+## Cadeia de suprimentos
+
+- Base `oven/bun:latest` muda com o tempo — o workflow de digest existe para **visibilidade** de atualizações; documentar riscos de rebuild automático.
+- `pip3 install yt-dlp`: pinning de versão pode ser desejável para builds reprodutíveis (avaliar trade-off com manutenção).
+
+## Downloads externos
+
+- O Dockerfile usa `wget` para pacote `.deb` de fontes Microsoft — manter URL/versão auditável; preferir espelhos Debian confiáveis (já documentado no Dockerfile).
+
+## Imagem publicada
+
+- Tags imutáveis reduzem risco de “latest” inesperado em produção; recomendar pinagem no README (já feito).
+
+## Checklist
+
+- [ ] Nenhum secret no diff
+- [ ] Novas ferramentas com justificativa e superfície mínima
+- [ ] Usuário não-root para CMD padrão

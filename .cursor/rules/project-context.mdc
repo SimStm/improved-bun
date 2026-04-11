@@ -1,0 +1,38 @@
+---
+description: "improved-bun: repositório de imagem Docker multi-arquitetura baseada em oven/bun:latest, com FFmpeg, yt-dlp, WebP, Cairo/Pango, fontes Microsoft Core; CI em .github/workflows; README é fonte de verdade para Docker Hub. Não há app TypeScript neste repo — mudanças são Dockerfile, workflows e documentação."
+globs: "**/*"
+alwaysApply: true
+---
+
+# Contexto do projeto — improved-bun
+
+## Identificação
+
+- **Nome:** improved-bun (imagem publicada como `simstosh/improved-bun` no Docker Hub, conforme README)
+- **Tipo:** Artefato de infraestrutura — **imagem Docker**, não aplicação Bun versionada aqui
+- **Base:** `FROM oven/bun:latest` (tracking do canal latest; digest monitorado por workflow)
+- **Usuário runtime:** `app` (UID 1000, grupos `audio`, `video`), WORKDIR `/app`, shell padrão bash
+
+## Conteúdo do repositório
+
+| Item | Função |
+|------|--------|
+| `Dockerfile` | Camada Debian: APT (ffmpeg, python3, webp, cairo, pango, rsvg, build tools, fontes…), pip `yt-dlp`, usuário não-root |
+| `README.md` | Documentação longa (EN/PT), badges, tags `latest` e `vYYYYMMDD.HHMMSS` |
+| `.github/workflows/docker-image.yml` | Build multi-arch e push |
+| `.github/workflows/check-bun-update.yml` | Verifica digest do `oven/bun:latest` e dispara atualização |
+| `.github/bun-base-digest` | Arquivo de estado do digest rastreado |
+
+## Consumidores típicos
+
+- Projetos Bun que precisam de **FFmpeg**, **yt-dlp**, renderização **Cairo/Pango** ou **fontes MS** em CI/CD — exemplo citado no README: `zap.bot.v2`-like workloads.
+
+## Relação com o workspace
+
+- **zap.bot.v2:** pode usar esta imagem como base de deploy quando precisar dos binários inclusos.
+- **zap.bot.api:** Node/Feathers — geralmente não usa esta imagem salvo decisão de unificar stack.
+
+## Versionamento de tags
+
+- `latest` = último build de `main`
+- Tags imutáveis `vYYYYMMDD.HHMMSS` para pinagem em produção

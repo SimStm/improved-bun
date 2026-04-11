@@ -1,0 +1,33 @@
+---
+description: "Docker e GitHub Actions do improved-bun: build multi-arch, push Docker Hub, sync README para overview, workflow check-bun-update com digest em .github/bun-base-digest; variáveis de ambiente TZ e DEBIAN_FRONTEND no Dockerfile."
+globs: "Dockerfile,.github/**/*.yml,.github/bun-base-digest"
+alwaysApply: false
+---
+
+# Docker / CI — improved-bun
+
+## Dockerfile (resumo)
+
+- Base: `oven/bun:latest AS install` (histórico do repo; estágio nomeado `install`)
+- `TZ=America/Sao_Paulo`, symlink timezone
+- APT: ffmpeg, python3, webp, cairo/pango dev libs, yt-dlp via pip `--break-system-packages` (compatível com Debian do base)
+- Usuário `app`, CMD `/bin/bash`
+
+## Workflows
+
+- `docker-image.yml` — build e push (ver steps no arquivo)
+- `check-bun-update.yml` — compara digest Registry v2 com `.github/bun-base-digest`
+
+## Boas práticas ao editar
+
+- Multi-arch: qualquer `RUN` que compile nativo deve funcionar em **amd64 e arm64**.
+- Reduzir camadas duplicadas `RUN apt-get update` quando possível (agrupar pacotes).
+
+## Uso por outros projetos
+
+```dockerfile
+FROM simstosh/improved-bun:latest
+WORKDIR /app
+```
+
+Para produção, considerar tag `vYYYYMMDD.HHMMSS` em vez de `latest`.
